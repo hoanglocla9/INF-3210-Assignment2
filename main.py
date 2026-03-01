@@ -29,15 +29,25 @@ def get_model(model):
 
 
 @torch.no_grad()
-def run_sequential(model, dataloader, dev):
+def run_sequential(model, dataloader, dev, model_name):
     print("Starting...")
 
     use_cache = model.config.use_cache
     model.config.use_cache = False
-    layers = model.model.layers
-
-    model.model.embed_tokens = model.model.embed_tokens.to(dev)
-    model.model.norm = model.model.norm.to(dev)
+    if "llama" in model_name.lower():
+        layers = model.model.layers
+        model.model.embed_tokens = model.model.embed_tokens.to(dev)
+        model.model.norm = model.model.norm.to(dev)
+    elif "opt" in model_name.lower():
+        layers = model.model.decoder.layers
+        model.model.decoder.embed_tokens = model.model.decoder.embed_tokens.to(dev)
+        model.model.decoder.embed_positions = model.model.decoder.embed_positions.to(dev)
+        model.model.decoder.final_layer_norm = model.model.decoder.final_layer_norm.to(dev) if model.model.decoder.final_layer_norm is not None else None 
+    elif "pythia" in model_name.lower():
+        layers = model.gpt_neox.layers
+        model.gpt_neox.embed_in = model.gpt_neox.embed_in.to(dev)
+        model.gpt_neox.final_layer_norm = model.gpt_neox.final_layer_norm.to(dev)
+        
     layers[0] = layers[0].to(dev)
 
     dtype = next(iter(model.parameters())).dtype
@@ -55,7 +65,7 @@ def run_sequential(model, dataloader, dev):
             inps[cache["i"]] = inp
             cache["i"] += 1
             cache["attention_mask"] = kwargs["attention_mask"]
-            if "position_embeddings":
+            if "position_embeddings" in kwargs:
                 cache["position_embeddings"] = kwargs["position_embeddings"]
 
             raise ValueError
@@ -69,8 +79,17 @@ def run_sequential(model, dataloader, dev):
     layers[0] = layers[0].module
 
     layers[0] = layers[0].cpu()
-    model.model.embed_tokens = model.model.embed_tokens.cpu()
-    model.model.norm = model.model.norm.cpu()
+    if "llama" in model_name.lower():
+        model.model.embed_tokens = model.model.embed_tokens.cpu()
+        model.model.norm = model.model.norm.cpu()
+    elif "opt" in model_name.lower():
+        model.model.decoder.embed_tokens = model.model.decoder.embed_tokens.cpu()
+        model.model.decoder.embed_positions = model.model.decoder.embed_positions.cpu()
+        model.model.decoder.final_layer_norm = model.model.decoder.final_layer_norm.cpu() if model.model.decoder.final_layer_norm is not None else None 
+    elif "pythia" in model_name.lower():
+        model.gpt_neox.embed_in = model.gpt_neox.embed_in.cpu()
+        model.gpt_neox.final_layer_norm = model.gpt_neox.final_layer_norm.cpu()
+
     torch.cuda.empty_cache()
 
     outs = torch.zeros_like(inps)
@@ -79,7 +98,7 @@ def run_sequential(model, dataloader, dev):
         position_embeddings = cache["position_embeddings"]
 
     print("Ready.")
-
+    print("here")
     for i in range(len(layers)):
         layer = layers[i].to(dev)
         full = find_layers(layer)
@@ -147,7 +166,7 @@ def run_sequential(model, dataloader, dev):
 
 
 @torch.no_grad()
-def run_eval(model, testenc, dev,  dataset: str, log_wandb: bool = False):
+def run_eval(model, testenc, dev,  dataset: str, model_name, log_wandb: bool = False):
     print("Evaluating ...")
 
     testenc = testenc.input_ids
@@ -155,9 +174,22 @@ def run_eval(model, testenc, dev,  dataset: str, log_wandb: bool = False):
 
     use_cache = model.config.use_cache
     model.config.use_cache = False
-    layers = model.model.layers
+#    layers = model.model.layers
+ #   model.model.embed_tokens = model.model.embed_tokens.to(dev)
+    if "llama" in model_name.lower():
+        layers = model.model.layers
+        model.model.embed_tokens = model.model.embed_tokens.to(dev)
+        model.model.norm = model.model.norm.to(dev)
+    elif "opt" in model_name.lower():
+        layers = model.model.decoder.layers
+        model.model.decoder.embed_tokens = model.model.decoder.embed_tokens.to(dev)
+        model.model.decoder.embed_positions = model.model.decoder.embed_positions.to(dev)
+        model.model.decoder.final_layer_norm = model.model.decoder.final_layer_norm.to(dev) if model.model.decoder.final_layer_norm is not None else None 
+    elif "pythia" in model_name.lower():
+        layers = model.gpt_neox.layers
+        model.gpt_neox.embed_in = model.gpt_neox.embed_in.to(dev)
+        model.gpt_neox.final_layer_norm = model.gpt_neox.final_layer_norm.to(dev)
 
-    model.model.embed_tokens = model.model.embed_tokens.to(dev)
     layers[0] = layers[0].to(dev)
 
     dtype = next(iter(model.parameters())).dtype
@@ -175,7 +207,7 @@ def run_eval(model, testenc, dev,  dataset: str, log_wandb: bool = False):
             inps[cache["i"]] = inp
             cache["i"] += 1
             cache["attention_mask"] = kwargs["attention_mask"]
-            if "position_embeddings":
+            if "position_embeddings" in kwargs:
                 cache["position_embeddings"] = kwargs["position_embeddings"]
             raise ValueError
 
@@ -189,7 +221,18 @@ def run_eval(model, testenc, dev,  dataset: str, log_wandb: bool = False):
     layers[0] = layers[0].module
 
     layers[0] = layers[0].cpu()
-    model.model.embed_tokens = model.model.embed_tokens.cpu()
+    #model.model.embed_tokens = model.model.embed_tokens.cpu()
+    if "llama" in model_name.lower():
+        model.model.embed_tokens = model.model.embed_tokens.cpu()
+        model.model.norm = model.model.norm.cpu()
+    elif "opt" in model_name.lower():
+        model.model.decoder.embed_tokens = model.model.decoder.embed_tokens.cpu()
+        model.model.decoder.embed_positions = model.model.decoder.embed_positions.cpu()
+        model.model.decoder.final_layer_norm = model.model.decoder.final_layer_norm.cpu() if model.model.decoder.final_layer_norm is not None else None 
+    elif "pythia" in model_name.lower():
+        model.gpt_neox.embed_in = model.gpt_neox.embed_in.cpu()
+        model.gpt_neox.final_layer_norm = model.gpt_neox.final_layer_norm.cpu()
+
     torch.cuda.empty_cache()
 
     outs = torch.zeros_like(inps)
@@ -220,17 +263,35 @@ def run_eval(model, testenc, dev,  dataset: str, log_wandb: bool = False):
         torch.cuda.empty_cache()
         inps, outs = outs, inps
 
-    if model.model.norm is not None:
-        model.model.norm = model.model.norm.to(dev)
-    model.lm_head = model.lm_head.to(dev)
+    #if model.model.norm is not None:
+     #   model.model.norm = model.model.norm.to(dev)
+    if "llama" in model_name.lower():
+        model.model.norm = model.model.norm.to(dev) if model.model.norm is not None else None
+        model.lm_head = model.lm_head.to(dev)
+    elif "opt" in model_name.lower():
+        model.lm_head = model.lm_head.to(dev)
+        model.model.decoder.final_layer_norm = model.model.decoder.final_layer_norm.to(dev) if model.model.decoder.final_layer_norm is not None else None 
+    elif "pythia" in model_name.lower():
+        model.gpt_neox.final_layer_norm = model.gpt_neox.final_layer_norm.to(dev) if model.gpt_neox.final_layer_norm is not None else None
+        model.embed_out = model.embed_out.to(dev)
+   # model.lm_head = model.lm_head.to(dev)
 
     testenc = testenc.to(dev)
     nlls = []
     for i in range(nsamples):
         hidden_states = inps[i].unsqueeze(0)
-        if model.model.norm is not None:
+        #if model.model.norm is not None:
+        if "llama" in model_name.lower():
             hidden_states = model.model.norm(hidden_states)
-        lm_logits = model.lm_head(hidden_states)
+            lm_logits = model.lm_head(hidden_states)
+        elif "opt" in model_name.lower():
+            lm_logits = model.lm_head(hidden_states)
+            hidden_states = model.model.decoder.final_layer_norm(hidden_states)
+        elif "pythia" in model_name.lower():
+            hidden_states = model.gpt_neox.final_layer_norm(hidden_states)
+            lm_logits = model.embed_out(hidden_states)
+        #lm_logits = model.lm_head(hidden_states)
+
         shift_logits = lm_logits[:, :-1, :].contiguous()
         shift_labels = testenc[:, (i * model.seqlen) : ((i + 1) * model.seqlen)][:, 1:]
         loss_fct = nn.CrossEntropyLoss()
@@ -321,7 +382,7 @@ if __name__ == "__main__":
 
     if (args.sparsity or args.prunen) and not args.gmp:
         tick = time.time()
-        run_sequential(model, dataloader, DEV)
+        run_sequential(model, dataloader, DEV, args.model)
         for n, p in model.named_parameters():
             print(n, torch.mean((p == 0).float()))
             if 'down_proj' in n:
@@ -333,7 +394,7 @@ if __name__ == "__main__":
             dataset, seed=args.seed, model=args.model, seqlen=model.seqlen
         )
         print("Dataset:", dataset)
-        run_eval(model, testloader, DEV, dataset, args.log_wandb)
+        run_eval(model, testloader, DEV, dataset, args.model, args.log_wandb)
 
     if args.save:
         model.save_pretrained(args.save)
